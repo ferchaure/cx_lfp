@@ -1,9 +1,9 @@
 function par = par_cb_lfp() 
  
-par.channels = 97:115; 
+par.channels = 97:115;
  
 %periodogram 
-par.n_samples = 2^15; 
+par.chunk_time = 1.1; %seconds
 par.fmax_update = 3000; 
  
 %plotting 

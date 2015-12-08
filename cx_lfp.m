@@ -78,33 +78,40 @@ function calc_loop(obj, event, hObject)
         par = handles.par;
         handles.N = handles.N + 1; 
         N = handles.N;
-        win = barthannwin(par.n_samples);
+        
+        win = cell(1,max(handles.sr4ch));
+        for i = 1: max(handles.sr4ch)
+            win{i} = barthannwin(handles.data{i}.n_s);
+        end
+        
         for i = 1:length(par.channels)
-        	[psd ,~]= periodogram(handles.x(i,:),win,par.n_samples,handles.sr,'oneside');
-            handles.PSD(i,:) = psd(1:length(handles.fs))' /N + handles.PSD(i,:)*(N-1)/N;
+            si = handles.sr4ch(i);  %sample rate
+        	[psd ,~] = periodogram(handles.x{i},win{si},handles.data{si}.n_s,handles.data{si}.sr,'oneside');
+            handles.PSD{i} = psd(1:length(handles.data{si}.fs))' /N + handles.PSD{i}*(N-1)/N;
         end
         handles.new_data_flag = false;
         guidata(hObject,handles);
         
-        log_psd = log10(handles.PSD(handles.n_show,:))';
-        plot(handles.axes1,handles.fs,10*log_psd);
+        si = handles.sr4ch(handles.n_show);  %sample rate
+        log_psd = log10(handles.PSD{handles.n_show})';
+        plot(handles.axes1,handles.data{si}.fs,10*log_psd);
         Ymanual = getappdata(handles.axes1,'Ymanual');
         if Ymanual
            ylim(handles.axes1,[str2num(get(handles.ymin_et,'String')),str2num(get(handles.ymax_et,'String'))]) 
         end
         %power fit
-        power_fit = log_psd(handles.index_fit_1);
-        p_all1 = polyfit(handles.freqs_fit_1,power_fit,1);
+        power_fit = log_psd(handles.data{si}.index_fit_1);
+        p_all1 = polyfit(handles.data{si}.freqs_fit_1,power_fit,1);
         k1=p_all1(1);
         loga=p_all1(2);
-        model = k1*handles.freqs_fit_1+loga;
+        model = k1*handles.data{si}.freqs_fit_1+loga;
         [r2_all1 ~] = rsquare(power_fit,model);
          
-        power_fit = log_psd(handles.index_fit_2);
-        p_all2 = polyfit(handles.freqs_fit_2,power_fit,1);
+        power_fit = log_psd(handles.data{si}.index_fit_2);
+        p_all2 = polyfit(handles.data{si}.freqs_fit_2,power_fit,1);
         k2 = p_all2(1);
         loga = p_all2(2);
-        model = k2*handles.freqs_fit_2+loga;
+        model = k2*handles.data{si}.freqs_fit_2+loga;
         [r2_all2 ~] = rsquare(power_fit,model); 
         
         fit_text = sprintf('POWER FIT (CH %d) \n',par.channels(handles.n_show));
@@ -122,19 +129,26 @@ function calc_loop(obj, event, hObject)
 
 function buffer_loop(obj, event,hObject)
     handles = guidata(hObject);
-    par = handles.par;
-    n_samples = par.n_samples;
 
     if handles.new_data_flag == false
-        [t_ini_buffer data] = cbmex('trialdata',1);
-        if n_samples <= size(data{1,3},1)
-            handles.sr = data{1,2};
-            for i = 1:size(data,1)
-                handles.x(i,:) = data{i,3}(1:n_samples);
+        [t_ini_buffer x] = cbmex('trialdata',1);
+        enogh_data = true;
+        for i = 1:max(handles.sr4ch)
+            ch = find(handles.sr4ch==i,1);
+            if handles.data{i}.n_s > size(x{ch,3},1)
+                enogh_data = false;
+            end
+        end
+        
+        if enogh_data
+            for i = 1:size(x,1)
+                si = handles.sr4ch(i);  %sample rate index
+                handles.x{i} = x{i,3}(1:handles.data{si}.n_s);
             end
             handles.new_data_flag = true;
             guidata(hObject,handles);
         end
+        
     else
         cbmex('trialdata',1);
     end
@@ -240,55 +254,67 @@ function start_adq(hObject)
     handles = guidata(hObject);
     handles.par = par_cb_lfp();
     par = handles.par;
-    n_s = handles.par.n_samples;
-    chs = handles.par.channels;
-
-    handles.x = zeros(length(chs),n_s);
     handles.new_data_flag = false;
     handles.N = 0;
     handles.n_show = 1 ;
+    chs = handles.par.channels;
     labels = cbmex('chanlabel',chs);
     handles.labels={labels{:,1}};
-
+    
     set(handles.channel_et,'String',num2str(chs(handles.n_show)))
-
     set(handles.fmin_et,'String',num2str(handles.par.fmin_disp))
     set(handles.fmax_et,'String',num2str(handles.par.fmax_disp))
     set(handles.info_label,'String',handles.labels{handles.n_show});
-    
+        
     cbmex('mask',0,0)
     for j = chs
         cbmex('mask',j,1)
     end
     cbmex('trialconfig',1,'noevent');
-    
-    [t_ini_buffer data] = cbmex('trialdata',1);
-    while size(data,1) == 0
-        [t_ini_buffer data] = cbmex('trialdata',1);
+    [t_ini_buffer x] = cbmex('trialdata',1);
+    while size(x,1) == 0
+        [t_ini_buffer x] = cbmex('trialdata',1);
     end
-    handles.sr = data{1,2};
-
-    [psd ,fs] = periodogram(zeros(1,n_s),barthannwin(n_s),n_s,handles.sr,'oneside');
+    handles.x = cell(1,length(chs));
+    handles.PSD = cell(1,length(chs));
     
-    handles.fs = fs(fs <= par.fmax_update);
+    uniques_sr = unique([x{:,2}]);
+    data = cell(1, length(uniques_sr));
+    handles.sr4ch = zeros(1,length(chs)); % using index of ch and sr 
     
-    handles.index_fit_1 = find(fs>par.fini_fit,1):find(fs>=par.fmid_fit,1);
-    handles.freqs_fit_1 = log10(fs(handles.index_fit_1));
+    for c = 1:length(uniques_sr)
+        sr = uniques_sr(c);
+        data{c}.sr = sr;
+        
+        n_s = 2^floor(log2(par.chunk_time*sr));
+        data{c}.n_s = n_s;
+        
+        handles.sr4ch([x{:,2}]==sr) = c;
+        
+        [psd ,fs] = periodogram(zeros(1,n_s),barthannwin(n_s),n_s,sr,'oneside');
+        fs = fs(fs <= par.fmax_update);
+        data{c}.fs = fs;
+        
+        data{c}.index_fit_1 = find(fs>par.fini_fit,1):find(fs>=par.fmid_fit,1);
+        data{c}.freqs_fit_1 = log10(fs(data{c}.index_fit_1));
+
+        data{c}.index_fit_2  = find(fs>par.fmid_fit,1):length(fs);
+        data{c}.freqs_fit_2 = log10(fs(data{c}.index_fit_2));
+        for i = find(handles.sr4ch==c)
+            handles.x{i} = zeros(1,n_s);
+            handles.PSD{i} = zeros(1,length(fs));
+        end
+    end
+    handles.data = data;
+    period = ceil(handles.par.chunk_time *100)/100; %time with less precision
     
-    handles.index_fit_2  = find(fs>par.fmid_fit,1):length(handles.fs);
-    handles.freqs_fit_2 = log10(fs(handles.index_fit_2));
-
-    handles.PSD = zeros(length(chs),length(handles.fs));%zeros(length(chs),n_s/2);
-
     % UIWAIT makes cx_lfp wait for user response (see UIRESUME)
     % uiwait(handles.cx_lfp);
-    period = ceil(n_s/handles.sr *100)/100;
-
+    
     handles.timer_buffer_loop = timer('Name','buffer_timer','TimerFcn',{@buffer_loop,hObject},'Period',period*1.1,'ExecutionMode','fixedDelay');
     handles.timer_calc_loop = timer('Name','calc_timer','TimerFcn',{@calc_loop,hObject},'Period',period*0.9,'ExecutionMode','fixedSpacing');
 
     guidata(hObject, handles);
-
     start(handles.timer_buffer_loop)
     start(handles.timer_calc_loop)
 
