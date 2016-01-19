@@ -22,7 +22,7 @@ function varargout = cx_lfp(varargin)
 
 % Edit the above text to modify the response to help cx_lfp
 
-% Last Modified by GUIDE v2.5 24-Nov-2015 12:49:52
+% Last Modified by GUIDE v2.5 15-Jan-2016 21:25:40
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -78,12 +78,8 @@ function calc_loop(obj, event, hObject)
         par = handles.par;
         handles.N = handles.N + 1; 
         N = handles.N;
-        
-        win = cell(1,max(handles.sr4ch));
-        for i = 1: max(handles.sr4ch)
-            win{i} = barthannwin(handles.data{i}.n_s);
-        end
-        
+
+        win = handles.win;
         for i = 1:length(par.channels)
             si = handles.sr4ch(i);  %sample rate
         	[psd ,~] = periodogram(handles.x{i},win{si},handles.data{si}.n_s,handles.data{si}.sr,'oneside');
@@ -277,11 +273,10 @@ function start_adq(hObject)
     end
     handles.x = cell(1,length(chs));
     handles.PSD = cell(1,length(chs));
-    
     uniques_sr = unique([x{:,2}]);
     data = cell(1, length(uniques_sr));
     handles.sr4ch = zeros(1,length(chs)); % using index of ch and sr 
-    
+    handles.win = cell(1,length(uniques_sr));
     for c = 1:length(uniques_sr)
         sr = uniques_sr(c);
         data{c}.sr = sr;
@@ -290,8 +285,8 @@ function start_adq(hObject)
         data{c}.n_s = n_s;
         
         handles.sr4ch([x{:,2}]==sr) = c;
-        
-        [psd ,fs] = periodogram(zeros(1,n_s),barthannwin(n_s),n_s,sr,'oneside');
+        handles.win{c} = barthannwin(n_s);
+        [psd ,fs] = periodogram(zeros(1,n_s),handles.win{c},n_s,sr,'oneside');
         fs = fs(fs <= par.fmax_update);
         data{c}.fs = fs;
         
@@ -305,6 +300,7 @@ function start_adq(hObject)
             handles.PSD{i} = zeros(1,length(fs));
         end
     end
+
     handles.data = data;
     period = ceil(handles.par.chunk_time *100)/100; %time with less precision
     
@@ -455,3 +451,55 @@ handles.n_show = new_n;
 set(handles.info_label,'String',handles.labels{handles.n_show});
 set(handles.channel_et,'String',num2str(chs(handles.n_show)))
 guidata(hObject,handles);
+
+
+function save_current_b_Callback(hObject, eventdata, handles)
+    save_channel_spectrum(handles.n_show,handles)
+    
+function save_all_b_Callback(hObject, eventdata, handles)
+    stop(handles.timer_buffer_loop);
+    stop(handles.timer_calc_loop);
+    save_channel_spectrum(1:length(handles.par.channels),handles)
+    start(handles.timer_buffer_loop)
+    start(handles.timer_calc_loop)
+    
+function save_channel_spectrum(ci,handles)       
+        if ~exist(date,'dir')
+            mkdir(date)
+        end
+        par = handles.par;
+        handles.N = handles.N + 1; 
+        N = handles.N;
+        
+        for ch = ci 
+            fig = figure('Visible','Off') ; 
+            si = handles.sr4ch(ch);  %sample rate
+            log_psd = log10(handles.PSD{ch})';
+            plot(handles.data{si}.fs,10*log_psd);
+            Ymanual = getappdata(handles.axes1,'Ymanual');
+            if Ymanual
+               ylim([str2num(get(handles.ymin_et,'String')),str2num(get(handles.ymax_et,'String'))]) 
+            end
+            %power fit
+            power_fit = log_psd(handles.data{si}.index_fit_1);
+            p_all1 = polyfit(handles.data{si}.freqs_fit_1,power_fit,1);
+            k1=p_all1(1);
+            loga=p_all1(2);
+            model = k1*handles.data{si}.freqs_fit_1+loga;
+            [r2_all1 ~] = rsquare(power_fit,model);
+
+            power_fit = log_psd(handles.data{si}.index_fit_2);
+            p_all2 = polyfit(handles.data{si}.freqs_fit_2,power_fit,1);
+            k2 = p_all2(1);
+            loga = p_all2(2);
+            model = k2*handles.data{si}.freqs_fit_2+loga;
+            [r2_all2 ~] = rsquare(power_fit,model); 
+
+            fit_text = sprintf('Ch %d:',par.channels(ch));
+            fit_text = sprintf('%s %1.1f-%1.1fHz: a=%1.2f (r^2=%1.2f) -|-',fit_text , par.fini_fit,par.fmid_fit,k1,r2_all1);
+            fit_text = sprintf('%s %1.1f-%1.1fHz: a=%1.2f (r^2=%1.2f)',fit_text , par.fmid_fit,par.fmax_update,k2,r2_all2);
+            title(fit_text);
+
+            xlim(handles.axes1,[par.fmin_disp,par.fmax_disp]);
+            print(fig,[date filesep handles.labels{ch}],'-dpng')
+        end

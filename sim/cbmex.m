@@ -1,7 +1,9 @@
 function varargout = cbmex(command, varargin)
 persistent active_ch
-max_ch = 180;
 
+max_ch = 180;
+%ch second freq:
+ch_other_freq = 100:102;
 
 if isempty(active_ch)
     active_ch = ones(max_ch,1);
@@ -30,9 +32,16 @@ switch command
         varargout{2} = cell(num_act_ch,3);
         for i =1 : num_act_ch
             varargout{2}{i,1} = channels(i);
-            varargout{2}{i,2} = 30000;
-            varargout{2}{i,3} = sin((1:2^15)*i/100)'+rand(2^15,1); %no estoy pensando como seria el espectro de esto... pero que son distintos seguro
+            if ismember(channels(i),ch_other_freq)
+                varargout{2}{i,2} = 1000;
+            else
+                varargout{2}{i,2} = 30000;
+            end
+            
+            varargout{2}{i,3} = sin((1:2^15)*i/100)'+rand(2^15,1); %example
         end
+
+
     otherwise
         varargout{1} = 0;
 end
