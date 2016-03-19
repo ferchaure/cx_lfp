@@ -98,16 +98,16 @@ function calc_loop(obj, event, hObject)
         %power fit
         power_fit = log_psd(handles.data{si}.index_fit_1);
         p_all1 = polyfit(handles.data{si}.freqs_fit_1,power_fit,1);
-        k1=p_all1(1);
-        loga=p_all1(2);
-        model = k1*handles.data{si}.freqs_fit_1+loga;
+        k1 = p_all1(1);
+        loga = p_all1(2);
+        model = k1 * handles.data{si}.freqs_fit_1 + loga;
         [r2_all1 ~] = rsquare(power_fit,model);
          
         power_fit = log_psd(handles.data{si}.index_fit_2);
         p_all2 = polyfit(handles.data{si}.freqs_fit_2,power_fit,1);
         k2 = p_all2(1);
         loga = p_all2(2);
-        model = k2*handles.data{si}.freqs_fit_2+loga;
+        model = k2 * handles.data{si}.freqs_fit_2 + loga;
         [r2_all2 ~] = rsquare(power_fit,model); 
         
         fit_text = sprintf('POWER FIT (CH %d) \n',par.channels(handles.n_show));
@@ -127,19 +127,20 @@ function buffer_loop(obj, event,hObject)
     handles = guidata(hObject);
 
     if handles.new_data_flag == false
-        [t_ini_buffer x] = cbmex('trialdata',1);
+        [~, x] = cbmex('trialdata',1);
         enogh_data = true;
         for i = 1:max(handles.sr4ch)
             ch = find(handles.sr4ch==i,1);
             if handles.data{i}.n_s > size(x{ch,3},1)
                 enogh_data = false;
+                break;
             end
         end
         
         if enogh_data
             for i = 1:size(x,1)
                 si = handles.sr4ch(i);  %sample rate index
-                handles.x{i} = x{i,3}(1:handles.data{si}.n_s);
+                handles.x{i} = double(x{i,3}(1:handles.data{si}.n_s));
             end
             handles.new_data_flag = true;
             guidata(hObject,handles);
@@ -171,7 +172,6 @@ restart = set_par_ui();
 if restart
     stop_adq(hObject)
     start_adq(hObject)
-    
 end
 
 
@@ -241,11 +241,14 @@ function stop_adq(hObject)
 function start_adq(hObject)
     if exist('C:\Program Files\Blackrock Microsystems\NeuroPort Windows Suite', 'dir')
         addpath('C:\Program Files\Blackrock Microsystems\NeuroPort Windows Suite')
+    elseif exist('C:\Program Files (x86)\Blackrock Microsystems\NeuroPort Windows Suite', 'dir')
+        addpath('C:\Program Files (x86)\Blackrock Microsystems\NeuroPort Windows Suite')
     else
         warning('Using cbmex simulator')
         addpath([pwd filesep 'sim'])
     end
     
+    clear functions % reset functions, force to reload set_parameters next
     [connection source] = cbmex('open');
     handles = guidata(hObject);
     handles.par = par_cb_lfp();
@@ -253,7 +256,12 @@ function start_adq(hObject)
     handles.new_data_flag = false;
     handles.N = 0;
     handles.n_show = 1 ;
-    chs = handles.par.channels;
+    chs = handles.par.channels; 
+    cbmex('mask',0,0)
+    for j = chs
+        cbmex('mask',j,1)
+    end
+
     labels = cbmex('chanlabel',chs);
     handles.labels={labels{:,1}};
     
@@ -261,11 +269,7 @@ function start_adq(hObject)
     set(handles.fmin_et,'String',num2str(handles.par.fmin_disp))
     set(handles.fmax_et,'String',num2str(handles.par.fmax_disp))
     set(handles.info_label,'String',handles.labels{handles.n_show});
-        
-    cbmex('mask',0,0)
-    for j = chs
-        cbmex('mask',j,1)
-    end
+
     cbmex('trialconfig',1,'noevent');
     [t_ini_buffer x] = cbmex('trialdata',1);
     while size(x,1) == 0
@@ -286,7 +290,7 @@ function start_adq(hObject)
         
         handles.sr4ch([x{:,2}]==sr) = c;
         handles.win{c} = barthannwin(n_s);
-        [psd ,fs] = periodogram(zeros(1,n_s),handles.win{c},n_s,sr,'oneside');
+        [psd ,fs] = periodogram(zeros(1,n_s,'double'),handles.win{c},n_s,sr,'oneside');
         fs = fs(fs <= par.fmax_update);
         data{c}.fs = fs;
         
@@ -296,8 +300,8 @@ function start_adq(hObject)
         data{c}.index_fit_2  = find(fs>par.fmid_fit,1):length(fs);
         data{c}.freqs_fit_2 = log10(fs(data{c}.index_fit_2));
         for i = find(handles.sr4ch==c)
-            handles.x{i} = zeros(1,n_s);
-            handles.PSD{i} = zeros(1,length(fs));
+            handles.x{i} = zeros(1,n_s,'double');
+            handles.PSD{i} = zeros(1,length(fs),'double');
         end
     end
 
@@ -458,10 +462,8 @@ function save_current_b_Callback(hObject, eventdata, handles)
     
 function save_all_b_Callback(hObject, eventdata, handles)
     stop(handles.timer_buffer_loop);
-    stop(handles.timer_calc_loop);
     save_channel_spectrum(1:length(handles.par.channels),handles)
     start(handles.timer_buffer_loop)
-    start(handles.timer_calc_loop)
     
 function save_channel_spectrum(ci,handles)       
         if ~exist(date,'dir')

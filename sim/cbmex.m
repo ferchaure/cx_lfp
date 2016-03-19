@@ -29,16 +29,20 @@ switch command
         varargout{1} = 0;
         num_act_ch = nnz(active_ch);
         channels = find(active_ch);
-        varargout{2} = cell(num_act_ch,3);
-        for i =1 : num_act_ch
-            varargout{2}{i,1} = channels(i);
+        varargout{2} = cell(num_act_ch, 3);
+        for i = 1 : num_act_ch
+            varargout{2}{i,1} = int32(channels(i));
             if ismember(channels(i),ch_other_freq)
-                varargout{2}{i,2} = 1000;
+                varargout{2}{i,2} = single(1000);
+                cant_n = floor(2^15*1000/30000);
+                varargout{2}{i,3} =  single(sin((1:cant_n)*i/100)'+rand(cant_n,1)); %example
             else
-                varargout{2}{i,2} = 30000;
+                varargout{2}{i,2} = single(30000);
+                varargout{2}{i,3} = single(sin((1:2^15)*i/100)'+rand(2^15,1)); %example
             end
             
-            varargout{2}{i,3} = sin((1:2^15)*i/100)'+rand(2^15,1); %example
+            
+            
         end
 
 
