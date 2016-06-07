@@ -1,5 +1,6 @@
 function par = par_cb_lfp() 
  
+par.IP_address = '': %string, empty for default mode 
 par.channels = 97:115;
  
 %periodogram 

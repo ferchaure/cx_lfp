@@ -249,10 +249,17 @@ function start_adq(hObject)
     end
     
     clear functions % reset functions, force to reload set_parameters next
-    [connection source] = cbmex('open');
     handles = guidata(hObject);
     handles.par = par_cb_lfp();
+    [connection source] = cbmex('open');
     par = handles.par;
+    if isempty(handles.par.IP_address)
+		[connection source] = cbmex('open');
+	else
+		[connection source] = cbmex('open', 2, 'central-addr',par.IP_address, 'instance', 1);
+	end
+    
+    
     handles.new_data_flag = false;
     handles.N = 0;
     handles.n_show = 1 ;
