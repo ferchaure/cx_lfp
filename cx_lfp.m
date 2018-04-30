@@ -251,7 +251,6 @@ function start_adq(hObject)
     clear functions % reset functions, force to reload set_parameters next
     handles = guidata(hObject);
     handles.par = par_cb_lfp();
-    [connection source] = cbmex('open');
     par = handles.par;
     if isempty(handles.par.IP_address)
 		[connection source] = cbmex('open');

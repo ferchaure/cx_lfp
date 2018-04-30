@@ -1,10 +1,10 @@
 function par = par_cb_lfp() 
  
-par.IP_address = '': %string, empty for default mode 
-par.channels = 97:115;
+par.IP_address = ''; %string, empty for default mode 
+par.channels = [1:64]; 
  
 %periodogram 
-par.chunk_time = 1.1; %seconds
+par.chunk_time = 1.1; %seconds 
 par.fmax_update = 3000; 
  
 %plotting 
@@ -15,3 +15,4 @@ par.fmax_disp= 3000;
 par.fini_fit = 2; 
 par.fmid_fit = 300; 
 end 
+ 
