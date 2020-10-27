@@ -22,7 +22,7 @@ function varargout = cx_lfp(varargin)
 
 % Edit the above text to modify the response to help cx_lfp
 
-% Last Modified by GUIDE v2.5 27-Oct-2020 14:20:03
+% Last Modified by GUIDE v2.5 27-Oct-2020 17:19:09
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -69,17 +69,22 @@ end
 function display_channel(n,hObject)
     h = guidata(hObject);
     set(h.N_lb,'String',num2str(h.N));
-    
+    set(h.channels_lb,'Value',n);
+
     if strcmp(h.ch_data{n}.unit,'uV') && h.par.custom_filter.(h.ch_data{n}.parsr).enable
-        additional_curve = 'notch and custom filter'; 
+        additional_curve = 'Notch and Custom Filter'; 
     else
-        additional_curve = 'notch'; 
+        additional_curve = 'Notch'; 
     end
     log_psd = 10*log10(h.ch_data{n}.psd);
     log_psd_filtered = 10*log10(h.ch_data{n}.psd_filtered);
     set(h.channel_label,'String',sprintf('%s | ID: %d', h.ch_data{n}.label,h.ch_data{n}.ch))
 
     %set gui params
+    set(h.info_channel,'String',{sprintf('Sampl. Rate: %1.0f Hz',h.ch_data{n}.sr),...
+        sprintf('Cont. Acq.: %s',h.ch_data{n}.smpfilter)});
+    
+    
     pars = h.ch_data{n}.parsr;
     
     set(h.xpower1,'String',num2str(h.par.x_power_manual.(pars).min));
@@ -100,11 +105,11 @@ function display_channel(n,hObject)
     xlim(h.spectrum,[h.par.x_power_manual.(pars).min,h.par.x_power_manual.(pars).max]);
     xlabel(h.spectrum,'Frequency (Hz)')
     ylabel(h.spectrum,'Power Spectrum (dB/Hz)')
-    
+    legend(h.spectrum,'Raw',additional_curve)
     %spectrum_zoom
     cla(h.spectrum_zoom); hold(h.spectrum_zoom,'on');
     plot(h.spectrum_zoom,h.sr_data{h.ch_data{n}.sri}.fs,log_psd,'LineWidth',1.5);
-    ylim(h.spectrum,[-inf, inf]);
+    ylim(h.spectrum_zoom,[-inf, inf]);
     yl = ylim(h.spectrum_zoom);
     plot(h.spectrum_zoom,h.sr_data{h.ch_data{n}.sri}.fs,log_psd_filtered,'r','LineWidth',1.5)
     ylim(h.spectrum_zoom,yl)
@@ -127,8 +132,6 @@ function display_channel(n,hObject)
     ylabel(h.time_filtered,{additional_curve,['(' h.ch_data{n}.unit ')']})
     xlabel(h.time_filtered,'Time (sec)')
     xlim(h.time_filtered,[h.sr_data{h.ch_data{n}.sri}.t(1) h.sr_data{h.ch_data{n}.sri}.t(end)])
-    
-    
     
 end
 
@@ -220,37 +223,6 @@ if restart
 end
 end
 
-function channel_et_Callback(hObject, eventdata, handles)
-% hObject    handle to channel_et (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of channel_et as text
-%        str2double(get(hObject,'String')) returns contents of channel_et as a double
-handles = guidata(hObject);
-ch_num = str2num(get(hObject,'String'));
-chs = handles.par.channels;
-if ~any(handles.par.channels == ch_num)
-    set(hObject,'String',num2str(chs(handles.n_show)))
-else
-    handles.n_show = find(handles.par.channels == ch_num);
-    set(handles.channel_label,'String',handles.labels{handles.n_show});
-    guidata(hObject,handles);
-end
-end
-% --- Executes during object creation, after setting all properties.
-function et_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to fmin_et (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
-if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor','white');
-end
-end
-
 % --- Executes when user attempts to close cx_lfp.
 function cx_lfp_CloseRequestFcn(hObject, eventdata, handles)
     stop_adq(hObject)
@@ -313,7 +285,8 @@ function start_adq(hObject)
     end
     chs = cell2mat(x(:,1));
     handles.par.channels = chs;
-    
+    handles.cbmex_lfp.PaperPosition = handles.cbmex_lfp.Position;
+    handles.cbmex_lfp.PaperPositionMode = 'auto';
     
     labels = cbmex('chanlabel',chs);
     set(handles.channels_lb,'string',labels(:,1)); 
@@ -383,6 +356,7 @@ function start_adq(hObject)
             sr_data{si}.custom_filter.G = g_pass;
         end
         for c = find(cellfun(@(x) x.sri==si,handles.ch_data))
+            handles.ch_data{c}.sr = sr;
             handles.ch_data{c}.nmax = nsamples;
             handles.ch_data{c}.nupdated = 0;
             handles.ch_data{c}.buffer = zeros(1,nsamples,'int16');
@@ -403,7 +377,7 @@ function start_adq(hObject)
     guidata(hObject, handles);
     start(handles.timer_buffer_loop)
     start(handles.timer_calc_loop)
-    display_channel(handles.n_show,hObject)
+    display_channel(1,hObject)
 end
 
 
@@ -413,43 +387,32 @@ function change_ch_Callback(hObject, inc)
 % hObject    handle to prev_ch (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles = guidata(hObject);
-ch_num = handles.channels_lb.Value;
-new_n = ch_num + inc;
-maxch = size(handles.channels_lb.String,1);
-if new_n > maxch
-    new_n = 1;
-elseif new_n == 0
-    new_n = maxch;
-end
-set(handles.channels_lb,'Value',new_n);
-display_channel(new_n,hObject)
+    handles = guidata(hObject);
+    ch_num = handles.channels_lb.Value;
+    new_n = ch_num + inc;
+    maxch = size(handles.channels_lb.String,1);
+    if new_n > maxch
+        new_n = 1;
+    elseif new_n == 0
+        new_n = maxch;
+    end
+    display_channel(new_n,hObject)
 end
 
-function save_channel_spectrum(ci,handles) 
-        stop(handles.timer_buffer_loop);
-    
-        if ~exist(date,'dir')
-            mkdir(date)
+function save_b_Callback(hObject)
+    h = guidata(hObject);
+    ch_num = h.channels_lb.Value;
+    selpath = uigetdir('choose folder');
+    if h.save_all_cb.Value ==0
+        saveas(h.cbmex_lfp,fullfile(selpath,[h.ch_data{ch_num}.label '.png']));
+    else
+        maxch = size(h.channels_lb.String,1);
+        for ch = circshift(1:maxch,-4)
+            display_channel(ch,hObject)
+            drawnow
+            saveas(h.cbmex_lfp,fullfile(selpath,[h.ch_data{ch}.label '.png']));
         end
-        par = handles.par;
-        handles.N = handles.N + 1; 
-        N = handles.N;
-        
-        for ch = ci 
-            fig = figure('Visible','Off') ; 
-            si =  handles.ch_data{ch}.sri;  %sample rate
-            log_psd = log10(handles.PSD{ch})';
-            plot(handles.sr_data{si}.fs,10*log_psd);
-            Ymanual = getappdata(handles.spectrum,'Ymanual');
-            if Ymanual
-               ylim([str2num(get(handles.ymin_et,'String')),str2num(get(handles.ymax_et,'String'))]) 
-            end
-
-            xlim(handles.spectrum,[par.fmin_disp,par.fmax_disp]);
-            print(fig,[date filesep handles.labels{ch}],'-dpng')
-        end
-        start(handles.timer_buffer_loop)
+    end
 end
         
 function channels_lb_Callback(hObject,eventdata,handles)
@@ -498,11 +461,42 @@ end
 
 
 % --- Executes on button press in fix_ypower_cb.
-function fixscale_cb_Callback(hObject, eventdaata)
+function fixscale_cb_Callback(hObject, eventdata)
 % hObject    handle to fix_ypower_cb (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-fix_ypower_cb
-fix_ypower_z_cb
-fix_yraw_cb
+switch hObject.Tag
+    case 'fix_ypower_cb'
+    case 'fix_ypower_z_cb'
+    case 'fix_yraw_cb'
+    case 'fix_yfiltered_cb'
+end
 % Hint: get(hObject,'Value') returns toggle state of fix_ypower_cb
+end
+
+
+
+function setlim_Callback(hObject, e, h)
+    new_value = str2num(e.Source.String);
+    ch_num = h.channels_lb.Value;
+	pars = h.ch_data{ch_num}.parsr;
+	edit_tag = hObject.Tag;
+    if strcmp(edit_tag,'xpower1') || strcmp(edit_tag,'xpower2')
+        if strcmp(edit_tag,'xpower1')
+            h.par.x_power_manual.(pars).min = new_value;
+        else
+            h.par.x_power_manual.(pars).max = new_value;
+        end
+        xlim(h.spectrum,[h.par.x_power_manual.(pars).min,h.par.x_power_manual.(pars).max]);
+    end
+    
+    if strcmp(edit_tag,'xpower1_zoom') || strcmp(edit_tag,'xpower2_zoom') 
+        if strcmp(edit_tag,'xpower1_zoom')
+            h.par.x_power_manual.(pars).min_zoom = new_value;
+        else
+            h.par.x_power_manual.(pars).max_zoom = new_value;
+        end
+        xlim(h.spectrum_zoom,[h.par.x_power_manual.(pars).min_zoom,h.par.x_power_manual.(pars).max_zoom]);
+    end
+    guidata(hObject, h);
+end
