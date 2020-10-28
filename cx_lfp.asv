@@ -69,11 +69,12 @@ end
 function display_channel(n,hObject)
     h = guidata(hObject);
     set(h.N_lb,'String',num2str(h.N));
-    
+    set(h.channels_lb,'Value',n);
+
     if strcmp(h.ch_data{n}.unit,'uV') && h.par.custom_filter.(h.ch_data{n}.parsr).enable
-        additional_curve = 'notch and custom filter'; 
+        additional_curve = 'Notch and Custom Filter'; 
     else
-        additional_curve = 'notch'; 
+        additional_curve = 'Notch'; 
     end
     log_psd = 10*log10(h.ch_data{n}.psd);
     log_psd_filtered = 10*log10(h.ch_data{n}.psd_filtered);
@@ -83,33 +84,50 @@ function display_channel(n,hObject)
     set(h.info_channel,'String',{sprintf('Sampl. Rate: %1.0f Hz',h.ch_data{n}.sr),...
         sprintf('Cont. Acq.: %s',h.ch_data{n}.smpfilter)});
     
-    
     pars = h.ch_data{n}.parsr;
+    set(h.xpower_min,'String',num2str(h.par.x_power_manual.(pars).min));
+    set(h.xpower_max,'String',num2str(h.par.x_power_manual.(pars).max));
+    set(h.xpower_z_min,'String',num2str(h.par.x_power_manual.(pars).min_zoom));
+    set(h.xpower_z_max,'String',num2str(h.par.x_power_manual.(pars).max_zoom));  
     
-    set(h.xpower1,'String',num2str(h.par.x_power_manual.(pars).min));
-    set(h.xpower2,'String',num2str(h.par.x_power_manual.(pars).max));
+    gui_par = [h.ch_data{n}.parsr  h.ch_data{n}.unit];
     
-    set(h.xpower1_zoom,'String',num2str(h.par.x_power_manual.(pars).min_zoom));
-    set(h.xpower2_zoom,'String',num2str(h.par.x_power_manual.(pars).max_zoom));  
-    
+    ylim_el = {'ypower_min','ypower_max','ypower_z_min','ypower_z_max','yraw_min','yraw_max','yfiltered_min','yfiltered_max'};
+    ylim_cv = {'fix_ypower_z_cb','fix_ypower_cb','fix_yraw_cb','fix_yfiltered_cb'};
+    for ed  = ylim_el
+        set(h.(ed{1}),'String',num2str(getappdata(h.(ed{1}),gui_par)))
+    end
+    for cb  = ylim_cv
+        v = getappdata(h.(cb{1}),gui_par);
+        set(h.(cb{1}),'Value',v);
+        enable_editlines(h.(cb{1}),v,h)
+    end
     %spectrum
     cla(h.spectrum); hold(h.spectrum,'on');
     plot(h.spectrum,h.sr_data{h.ch_data{n}.sri}.fs,log_psd,'LineWidth',1.5);
-    ylim(h.spectrum,[-inf, inf]);
-    yl = ylim(h.spectrum);
+    if getappdata(fix_ypower_cb,gui_par)
+        yl = [getappdata(h.ypower_min,gui_par),getappdata(h.ypower_max,gui_par)];
+    else
+        ylim(h.spectrum,[-inf, inf]);
+        yl = ylim(h.spectrum);
+    end
     plot(h.spectrum,h.sr_data{h.ch_data{n}.sri}.fs,log_psd_filtered,'r','LineWidth',1.5)
-    
     ylim(h.spectrum,yl)
     h.spectrum.XMinorGrid = 'on'; h.spectrum.YMinorGrid = 'on';    
     xlim(h.spectrum,[h.par.x_power_manual.(pars).min,h.par.x_power_manual.(pars).max]);
     xlabel(h.spectrum,'Frequency (Hz)')
     ylabel(h.spectrum,'Power Spectrum (dB/Hz)')
     legend(h.spectrum,'Raw',additional_curve)
+    
     %spectrum_zoom
     cla(h.spectrum_zoom); hold(h.spectrum_zoom,'on');
     plot(h.spectrum_zoom,h.sr_data{h.ch_data{n}.sri}.fs,log_psd,'LineWidth',1.5);
-    ylim(h.spectrum_zoom,[-inf, inf]);
-    yl = ylim(h.spectrum_zoom);
+    if getappdata(fix_ypower_z_cb,gui_par)
+        yl = [getappdata(h.ypower_z_min,gui_par),getappdata(h.ypower_z_max,gui_par)];
+    else
+        ylim(h.spectrum_zoom,[-inf, inf]);
+        yl = ylim(h.spectrum_zoom);
+    end
     plot(h.spectrum_zoom,h.sr_data{h.ch_data{n}.sri}.fs,log_psd_filtered,'r','LineWidth',1.5)
     ylim(h.spectrum_zoom,yl)
     h.spectrum_zoom.XMinorGrid = 'on'; h.spectrum_zoom.YMinorGrid = 'on';
@@ -123,15 +141,23 @@ function display_channel(n,hObject)
     h.time_raw.XMinorGrid = 'on'; h.time_raw.YMinorGrid = 'on';
     ylabel(h.time_raw,['Raw (' h.ch_data{n}.unit ')'])
     xlabel(h.time_raw,'Time (sec)')
-    xlim(h.time_raw,[h.sr_data{h.ch_data{n}.sri}.t(1) h.sr_data{h.ch_data{n}.sri}.t(end)])
+    %xlim(h.time_raw,[h.sr_data{h.ch_data{n}.sri}.t(1) h.sr_data{h.ch_data{n}.sri}.t(end)])
+    if getappdata(fix_yraw_cb,gui_par)
+        ylim(fix_yraw_cb,[getappdata(h.yraw_min,gui_par),getappdata(h.yraw_max,gui_par)])
+    end
     %time_filtered
     cla(h.time_filtered)
     plot(h.time_filtered,h.sr_data{h.ch_data{n}.sri}.t,h.ch_data{n}.cont_filtered,'r','LineWidth',1.2);
     h.time_raw.XMinorGrid = 'on'; h.time_filtered.YMinorGrid = 'on';
     ylabel(h.time_filtered,{additional_curve,['(' h.ch_data{n}.unit ')']})
     xlabel(h.time_filtered,'Time (sec)')
-    xlim(h.time_filtered,[h.sr_data{h.ch_data{n}.sri}.t(1) h.sr_data{h.ch_data{n}.sri}.t(end)])
+    linkaxes([h.time_raw,h.time_filtered],'x')
     
+    if getappdata(fix_yfiltered_cb,gui_par)
+        ylim(fix_yraw_cb,[getappdata(h.yfiltered_min,gui_par),getappdata(h.yfiltered_max,gui_par)])
+    end
+    xlim(h.time_filtered,[h.sr_data{h.ch_data{n}.sri}.t(1) h.sr_data{h.ch_data{n}.sri}.t(end)])
+
 end
 
 
@@ -368,6 +394,24 @@ function start_adq(hObject)
     set(handles.N_lb,'String','0');
     
     handles.sr_data = sr_data;
+    
+    %GUI params
+    if ~ isappdata(handles.fix_ypower_z_cb,'f3000uV')
+        ylim_el = {'ypower_min','ypower_max','ypower_z_min','ypower_z_max','yraw_min','yraw_max','yfiltered_min','yfiltered_max'};
+        ylim_cv = {'fix_ypower_z_cb','fix_ypower_cb','fix_yraw_cb','fix_yfiltered_cb'};
+        for parstr = fieldnames(handles.par.x_power_manual)'
+            for unit = {'uV','mV'}
+                field = [parstr{1} unit{1}];
+                for cb = ylim_cv
+                    setappdata(handles.(cb{1}),field,false);
+                end
+                for et = ylim_el
+                    setappdata(handles.(et{1}),field,'0');
+                end
+            end
+        end
+    end
+    
     get_period = round(handles.par.ffftlength*0.9,3); %time with less precision
     plot_period = round((handles.par.n_blocks*get_period  )*1.1,3);
     handles.timer_buffer_loop = timer('Name','buffer_timer','TimerFcn',{@buffer_loop,hObject},'Period',plot_period,'ExecutionMode','fixedDelay');
@@ -395,22 +439,19 @@ function change_ch_Callback(hObject, inc)
     elseif new_n == 0
         new_n = maxch;
     end
-    set(handles.channels_lb,'Value',new_n);
     display_channel(new_n,hObject)
 end
 
 function save_b_Callback(hObject)
     h = guidata(hObject);
     ch_num = h.channels_lb.Value;
-    
+    selpath = uigetdir('choose folder');
     if h.save_all_cb.Value ==0
-        selpath = uigetdir('choose folder');
         saveas(h.cbmex_lfp,fullfile(selpath,[h.ch_data{ch_num}.label '.png']));
     else
-        h.channels_lb.String
-        for ch = 1:4
-        
-            display_channel(ch)
+        maxch = size(h.channels_lb.String,1);
+        for ch = circshift(1:maxch,-4)
+            display_channel(ch,hObject)
             drawnow
             saveas(h.cbmex_lfp,fullfile(selpath,[h.ch_data{ch}.label '.png']));
         end
@@ -467,24 +508,67 @@ function fixscale_cb_Callback(hObject, eventdata)
 % hObject    handle to fix_ypower_cb (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-switch hObject.Tag
-    case 'fix_ypower_cb'
-    case 'fix_ypower_z_cb'
-    case 'fix_yraw_cb'
-    case 'fix_yfiltered_cb'
-end
-% Hint: get(hObject,'Value') returns toggle state of fix_ypower_cb
+    h = guidata(hObject);
+    ch = h.channels_lb.Value;
+    field = [h.ch_data{ch}.parsr  h.ch_data{ch}.unit];
+    setappdata(hObject,field,hObject.Value);
+    enable_editlines(hObject.Tag,hObject.Value,h)
+    switch hObject.Tag
+        case 'fix_ypower_cb'
+            ax = h.spectrum;
+            ymin = getappdata(h.ypower_min,field);
+            ymax = getappdata(h.ypower_max,field);
+        case 'fix_ypower_z_cb'
+            ax = h.spectrum_zoom;
+            ymin = getappdata(h.ypower_z_min,field);
+            ymax = getappdata(h.ypower_z_max,field);
+        case 'fix_yraw_cb'
+            ax = h.time_raw;
+            ymin = getappdata(h.yraw_min,field);
+            ymax = getappdata(h.yraw_max,field);
+        case 'fix_yfiltered_cb'
+            ax = h.time_filtered;
+            ymin = getappdata(h.yfiltered_min,field);
+            ymax = getappdata(h.yfiltered_max,field);
+    end
+    if hObject.Value==1
+        ylim(ax,[ymin ymax])
+    else
+        ylim(ax,'auto')
+    end
 end
 
-
+function enable_editlines(checkbox_name,value,h)
+    if value==1
+        enable = 'on';
+    else
+        enable = 'off';
+    end
+    switch checkbox_name
+        case 'fix_ypower_cb'
+            set(h.ypower_min,'Enable',fieenableld);
+            set(h.ypower_max,'Enable',fieenableld);
+        case 'fix_ypower_z_cb'
+            set(h.ypower_z_min,'Enable',fieenableld);
+            set(h.ypower_z_max,'Enable',fieenableld);
+        case 'fix_yraw_cb'
+            set(h.yraw_min,field,'Enable',fieenableld);
+            set(h.yraw_max,field,'Enable',fieenableld);
+        case 'fix_yfiltered_cb'
+            set(h.yfiltered_min,field,'Enable',fieenableld);
+            set(h.yfiltered_max,field,'Enable',fieenableld);
+    end
+end
 
 function setlim_Callback(hObject, e, h)
     new_value = str2num(e.Source.String);
     ch_num = h.channels_lb.Value;
 	pars = h.ch_data{ch_num}.parsr;
 	edit_tag = hObject.Tag;
-    if strcmp(edit_tag,'xpower1') || strcmp(edit_tag,'xpower2')
-        if strcmp(edit_tag,'xpower1')
+    gui_par = [h.ch_data{n}.parsr  h.ch_data{n}.unit];
+
+    if strcmp(edit_tag,'xpower_min') || strcmp(edit_tag,'xpower_max')
+        if strcmp(edit_tag,'xpower_min')
             h.par.x_power_manual.(pars).min = new_value;
         else
             h.par.x_power_manual.(pars).max = new_value;
@@ -492,13 +576,52 @@ function setlim_Callback(hObject, e, h)
         xlim(h.spectrum,[h.par.x_power_manual.(pars).min,h.par.x_power_manual.(pars).max]);
     end
     
-    if strcmp(edit_tag,'xpower1_zoom') || strcmp(edit_tag,'xpower2_zoom') 
-        if strcmp(edit_tag,'xpower1_zoom')
+    if strcmp(edit_tag,'xpower_z_min') || strcmp(edit_tag,'xpower_z_max') 
+        if strcmp(edit_tag,'xpower_z_min')
             h.par.x_power_manual.(pars).min_zoom = new_value;
         else
             h.par.x_power_manual.(pars).max_zoom = new_value;
         end
         xlim(h.spectrum_zoom,[h.par.x_power_manual.(pars).min_zoom,h.par.x_power_manual.(pars).max_zoom]);
     end
+    
+    if strcmp(edit_tag,'ypower_min') || strcmp(edit_tag,'ypower_max') 
+        if strcmp(edit_tag,'ypower_min')
+            setappdata(h.ypower_min,gui_par,new_value);
+        else
+            setappdata(h.ypower_max,gui_par,new_value);
+        end
+        ylim(h.spectrum,[getappdata(h.ypower_min,gui_par),getappdata(h.ypower_max,gui_par)];);
+    end
+    
+    if strcmp(edit_tag,'ypower_z_min') || strcmp(edit_tag,'ypower_z_max') 
+        if strcmp(edit_tag,'ypower_z_min')
+            setappdata(h.ypower_z_min,gui_par,new_value);
+        else
+            setappdata(h.ypower_z_max,gui_par,new_value);
+        end
+        ylim(h.spectrum_zoom,[getappdata(h.ypower_z_min,gui_par),getappdata(h.ypower_z_max,gui_par)];);
+    end
+    
+    if strcmp(edit_tag,'yraw_min') || strcmp(edit_tag,'yraw_max') 
+        if strcmp(edit_tag,'yraw_min')
+            setappdata(h.ypower_z_min,gui_par,new_value);
+        else
+            setappdata(h.ypower_z_max,gui_par,new_value);
+        end
+        ylim(h.time_raw,[getappdata(h.ypower_z_min,gui_par),getappdata(h.ypower_z_max,gui_par)];);
+    end
+    
+    if strcmp(edit_tag,'ypower_z_min') || strcmp(edit_tag,'ypower_z_max') 
+        if strcmp(edit_tag,'ypower_z_min')
+            setappdata(h.ypower_z_min,gui_par,new_value);
+        else
+            setappdata(h.ypower_z_max,gui_par,new_value);
+        end
+        ylim(h.spectrum_zoom,[getappdata(h.ypower_z_min,gui_par),getappdata(h.ypower_z_max,gui_par)];);
+    end
+    
+    
+    
     guidata(hObject, h);
 end

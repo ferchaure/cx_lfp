@@ -6,7 +6,7 @@ par.ffftlength = 2^ceil(log2(30000*2))/30000; %seconds it will be increased to u
 par.freq_line = 60; 
 par.notch_width = 1;
 %plotting
-par.n_blocks  = 2;
+par.n_blocks  = 5;
 
 par.x_power_manual = struct;
 par.x_power_manual.('f500').min = 0;
