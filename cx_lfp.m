@@ -66,8 +66,7 @@ function varargout = cx_lfp_OutputFcn(~, ~, handles)
     fig.WindowState='maximized';
 end
 
-function display_channel(n,hObject)
-    h = guidata(hObject);
+function display_channel(n,h)
     N = getappdata(h.cbmex_lfp,'N');
     set(h.N_lb,'String',num2str(N));
     set(h.channels_lb,'Value',n);
@@ -79,8 +78,7 @@ function display_channel(n,hObject)
     else
         additional_curve = 'Notch'; 
     end
-    log_psd = 10*log10(ch_data(n).psd);
-    log_psd_filtered = 10*log10(ch_data(n).psd_filtered);
+
     set(h.channel_label,'String',sprintf('%s | ID: %d', ch_info(n).label,ch_info(n).ch))
 
     %set gui params
@@ -106,10 +104,11 @@ function display_channel(n,hObject)
         enable_editlines(h.(cb{1}),v,h)
     end
     %spectrum
-    cla(h.spectrum); hold(h.spectrum,'on');
+    cla(h.spectrum); 
     sr_data = getappdata(h.cbmex_lfp,'sr_data');
 
-    plot(h.spectrum,sr_data(ch_info(n).sri).fs,log_psd,'LineWidth',1.5);
+    line(h.spectrum,sr_data(ch_info(n).sri).fs,ch_data(n).log_psd,'LineWidth',1.5);
+
     if getappdata(h.fix_ypower_cb,gui_par)
         yl = [getappdata(h.ypower_min,gui_par),getappdata(h.ypower_max,gui_par)];
     else
@@ -117,17 +116,17 @@ function display_channel(n,hObject)
         yl = ylim(h.spectrum);
         yl(1) = yl(1) - 0.05*(yl(2)-yl(1));  
     end
-    plot(h.spectrum,sr_data(ch_info(n).sri).fs,log_psd_filtered,'r','LineWidth',0.75)
+    line(h.spectrum,sr_data(ch_info(n).sri).fs,ch_data(n).log_psd_filtered,'Color','r','LineWidth',0.75)
+
     ylim(h.spectrum,yl)
-    h.spectrum.XMinorGrid = 'on'; h.spectrum.YMinorGrid = 'on';    
     xlim(h.spectrum,[par.x_power_manual.(pars).min,par.x_power_manual.(pars).max]);
-    xlabel(h.spectrum,'Frequency (Hz)')
-    ylabel(h.spectrum,'Power Spectrum (dB/Hz)')
+
     legend(h.spectrum,'Raw',additional_curve)
     
     %spectrum_zoom
-    cla(h.spectrum_zoom); hold(h.spectrum_zoom,'on');
-    plot(h.spectrum_zoom,sr_data(ch_info(n).sri).fs,log_psd,'LineWidth',1.5);
+    cla(h.spectrum_zoom);
+    line(h.spectrum_zoom,sr_data(ch_info(n).sri).fs,ch_data(n).log_psd,'LineWidth',1.5);
+
     if getappdata(h.fix_ypower_z_cb,gui_par)
         yl = [getappdata(h.ypower_z_min,gui_par),getappdata(h.ypower_z_max,gui_par)];
     else
@@ -135,36 +134,32 @@ function display_channel(n,hObject)
         yl = ylim(h.spectrum_zoom);
         yl(1) = yl(1) - 0.05*(yl(2)-yl(1));  
     end
-    plot(h.spectrum_zoom,sr_data(ch_info(n).sri).fs,log_psd_filtered,'r','LineWidth',0.75)
+    line(h.spectrum_zoom,sr_data(ch_info(n).sri).fs,ch_data(n).log_psd_filtered,'Color','r','LineWidth',0.75);
     ylim(h.spectrum_zoom,yl)
-    h.spectrum_zoom.XMinorGrid = 'on'; h.spectrum_zoom.YMinorGrid = 'on';
     xlim(h.spectrum_zoom,[par.x_power_manual.(pars).min_zoom,par.x_power_manual.(pars).max_zoom]);
-    xlabel(h.spectrum_zoom,'Frequency (Hz)')
-    ylabel(h.spectrum_zoom,'Power Spectrum (dB/Hz)')
-
+    part_line = (mod(N-1,par.n_blocks)+1)*sr_data(ch_info(n).sri).t(end)/par.n_blocks;
+    
     %time_raw
+    
     cla(h.time_raw)
-    plot(h.time_raw,sr_data(ch_info(n).sri).t,ch_data(n).cont,'LineWidth',1.2);
-    h.time_raw.XMinorGrid = 'on'; h.time_raw.YMinorGrid = 'on';
+    line(h.time_raw,sr_data(ch_info(n).sri).t,ch_data(n).cont,'LineWidth',1.2);
+    xline(h.time_raw,part_line,'k','LineStyle','--','LineWidth',1.5);
     ylabel(h.time_raw,['Raw (' ch_info(n).unit ')'])
-    xlabel(h.time_raw,'Time (sec)')
     xlim(h.time_raw,[sr_data(ch_info(n).sri).t(1) sr_data(ch_info(n).sri).t(end)])
     if getappdata(h.fix_yraw_cb,gui_par)
         ylim(h.time_raw,[getappdata(h.yraw_min,gui_par),getappdata(h.yraw_max,gui_par)])
     end
+    
     %time_filtered
     cla(h.time_filtered)
-    plot(h.time_filtered,sr_data(ch_info(n).sri).t,ch_data(n).cont_filtered,'r','LineWidth',1.2);
-    h.time_raw.XMinorGrid = 'on'; h.time_filtered.YMinorGrid = 'on';
+    line(h.time_filtered,sr_data(ch_info(n).sri).t,ch_data(n).cont_filtered,'Color','r','LineWidth',1.2);
+    xline(h.time_filtered,part_line,'k','LineStyle','--','LineWidth',1.5);
     ylabel(h.time_filtered,{additional_curve,['(' ch_info(n).unit ')']})
-    xlabel(h.time_filtered,'Time (sec)')
-    
-    
+
     if getappdata(h.fix_yfiltered_cb,gui_par)
         ylim(h.time_filtered,[getappdata(h.yfiltered_min,gui_par),getappdata(h.yfiltered_max,gui_par)])
     end
     xlim(h.time_filtered,[sr_data(ch_info(n).sri).t(1) sr_data(ch_info(n).sri).t(end)])
-    linkaxes([h.time_raw,h.time_filtered],'x')
 end
 
 
@@ -173,6 +168,7 @@ end
 
 function buffer_loop(this_timer,~,cbmex_lfp,handles)
 %function that is called using a timer and update the gui data
+    %t1 = tic();
     par = getappdata(cbmex_lfp,'par');
     stop(this_timer)
     [~, nsp_buffer] = cbmex('trialdata',1);
@@ -182,24 +178,31 @@ function buffer_loop(this_timer,~,cbmex_lfp,handles)
     end
     keep_loading = false;
     buffer = getappdata(cbmex_lfp,'buffer');
+    matlab_losses = 0;
+    nsx_losses = 0;
     for ci = 1:length(par.channels)
         news = size(nsp_buffer{ci,3},1);
-        if news == 102400 %by default max datapoints per channel 102400
-            warning('lossing continuos data in nsp buffer')
+        if news >= 102399 %by default max datapoints per channel 102400
+            nsx_losses = 1 + nsx_losses;
         end
         to_update = min(news,buffer(ci).nmax*2-buffer(ci).nupdated);
         if to_update < news
-            warning('lossing continuos data in matlab buffer')
+            matlab_losses = matlab_losses + 1;
         end
         buffer(ci).data(buffer(ci).nupdated+1:buffer(ci).nupdated+to_update) = nsp_buffer{ci,3}(1:to_update);
         buffer(ci).nupdated = to_update + buffer(ci).nupdated;
         
         
         if ci==1
-            extra_data = mod(buffer(ci).nupdated,buffer(ci).nmax); %in the ideal case extra_Data should be 0
-            next_call = par.ffftlength - extra_data/nsp_buffer{ci,2};
-            next_call = round(next_call,3);
-            this_timer.StartDelay = next_call;
+            
+            if buffer(ci).nupdated <= buffer(ci).nmax
+                extra_data = mod(buffer(ci).nupdated,buffer(ci).nmax); %in the ideal case extra_Data should be 0
+                next_call = par.ffftlength - extra_data/nsp_buffer{ci,2};
+                next_call = round(next_call,3);
+                this_timer.StartDelay = next_call;
+            else
+                this_timer.StartDelay = 0.001;
+            end
             start(this_timer)
         end
         
@@ -207,12 +210,21 @@ function buffer_loop(this_timer,~,cbmex_lfp,handles)
             keep_loading = true; %todos tienen que ser true!!!!!
         end
     end
+    
+    if nsx_losses>0
+        warning('lossing continuos data in nsp buffer on %d channels.',nsx_losses)
+    end
+    if matlab_losses>0
+        warning('lossing continuos data in Matlab buffer on %d channels.',matlab_losses)
+    end
+    td = 0;
     if keep_loading == false %all buffers are full
         sr_data = getappdata(cbmex_lfp,'sr_data');
         ch_info = getappdata(cbmex_lfp,'ch_info');
         ch_data = getappdata(cbmex_lfp,'ch_data');
         N = getappdata(cbmex_lfp,'N');
         N = N + 1; 
+        Nover_1 = 1/N;
         bl_part = mod(N-1,par.n_blocks);
         for i = 1:length(par.channels)
             new_segment = (bl_part)*buffer(i).nmax+1:(bl_part+1)*buffer(i).nmax;
@@ -223,8 +235,8 @@ function buffer_loop(this_timer,~,cbmex_lfp,handles)
             buffer(i).nupdated = buffer(i).nupdated - buffer(i).nmax;
             
             si = ch_info(i).sri ;  %sample rate
-            psd = periodogram(ch_data(i).cont(new_segment(1:sr_data(si).fft_n_s)),sr_data(si).win,buffer(i).nmax,sr_data(si).sr,'onesided');
-            ch_data(i).psd(:) = psd/N + ch_data(i).psd*(N-1)/N;
+            psd = periodogram(ch_data(i).cont(new_segment(1:sr_data(si).fft_n_s)),sr_data(si).win,sr_data(si).fft_n_s,sr_data(si).sr,'onesided');
+            ch_data(i).psd(:) = (psd + ch_data(i).psd*(N-1))*Nover_1;
 
             if strcmp(ch_info(i).unit,'uV') && par.custom_filter.(ch_info(i).parsr).enable  
                 s = sr_data(si).custom_filter.S;
@@ -234,19 +246,21 @@ function buffer_loop(this_timer,~,cbmex_lfp,handles)
                 g = sr_data(si).notch.G;
             end
             ch_data(i).cont_filtered(new_segment)= filtfilt(s,g,ch_data(i).cont(new_segment));
-
-            [psd ,~] = pwelch(ch_data(i).cont_filtered,sr_data(si).win,0,[],sr_data(si).sr,'onesided');
-            ch_data(i).psd_filtered(:) = psd/N + ch_data(i).psd_filtered*(N-1)/N;       
-
+            psd = periodogram(ch_data(i).cont_filtered(new_segment(1:sr_data(si).fft_n_s)),sr_data(si).win,sr_data(si).fft_n_s,sr_data(si).sr,'onesided');
+            ch_data(i).psd_filtered(:) = (psd + ch_data(i).psd_filtered*(N-1))*Nover_1;       
+            ch_data(i).log_psd(:) = 10*log10(ch_data(i).psd);
+            ch_data(i).log_psd_filtered(:) = 10*log10(ch_data(i).psd_filtered);
         end
         setappdata(cbmex_lfp,'ch_data',ch_data);
         setappdata(cbmex_lfp,'N',N)
         if bl_part==(par.n_blocks-1) && handles.stop_refresh_cb.Value==false
-            display_channel(handles.channels_lb.Value,cbmex_lfp)
+            td1=tic();
+            display_channel(handles.channels_lb.Value,handles)
+            td = toc(td1);
         end
     end
     setappdata(cbmex_lfp,'buffer',buffer)
-    
+    %disp(sprintf('loop complete : %f seconds - plotting: %f' ,toc(t1),td));
 end
     
 
@@ -261,11 +275,11 @@ function restart_button_Callback(hObject, ~, ~)
 end
 
 % --- Executes on button press in set_param_button.
-function set_param_button_Callback(hObject, eventdata, handles)
+function set_param_button_Callback(hObject, ~, ~)
 % hObject    handle to set_param_button (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-restart = set_par_ui();
+%restart = set_par_ui();
 if restart
     stop_adq(hObject)
     start_adq(hObject)
@@ -273,7 +287,7 @@ end
 end
 
 % --- Executes when user attempts to close cx_lfp.
-function cx_lfp_CloseRequestFcn(hObject, eventdata, handles)
+function cx_lfp_CloseRequestFcn(hObject, ~, ~)
     stop_adq(hObject)
     delete(hObject);
 end
@@ -305,17 +319,28 @@ function start_adq(hObject)
     
     clear functions % reset functions, force to reload set_parameters next
     handles = guidata(hObject);
-    par = par_cb_lfp();
+    if isappdata(handles.cbmex_lfp,'par')
+        par = getappdata(handles.cbmex_lfp,'par');
+    else
+        par = par_cb_lfp();
+    end
+
+    app = cbmex_config(handles.cbmex_lfp,par);
+    waitfor(app)
+    par = getappdata(handles.cbmex_lfp,'par');
+    if isempty(par)
+        error('config windows closed')
+    end
     if isempty(par.IP_address)
-		[connection source] = cbmex('open');
+		[connection, source] = cbmex('open');
 	else
-		[connection source] = cbmex('open','central-addr',par.IP_address, 'instance',0);
+		[connection, source] = cbmex('open','central-addr',par.IP_address, 'instance',0);
 	end
     
     handles.new_data_loaded = false;
     chs = par.channels;
     pause(0.01)
-    if ~isstr(chs)
+    if ~ischar(chs)
         cbmex('mask',0,0)
         for j = chs
             pause(0.01)
@@ -369,7 +394,6 @@ function start_adq(hObject)
         ch_info(ci).smpfilter = smpfilter2str(aux_info{smpfilter_n,ci+1});
     end
     setappdata(handles.cbmex_lfp,'ch_info',ch_info);
-    freq_line = par.freq_line;
     ch_data = struct();
     buffer = struct();
     sr_data = struct(); % selected using sr index
@@ -420,7 +444,9 @@ function start_adq(hObject)
             sr_data(si).custom_filter.S = s_pass;
             sr_data(si).custom_filter.G = g_pass;
         end
+        sr_data(si).ci = [];
         for c = find(cellfun(@(x) x==si,{ch_info.sri}))
+            sr_data(si).ci(end+1) = c;
             buffer(c).nmax = n_s;
             buffer(c).nupdated = 0;
             buffer(c).data = zeros(1,2*n_s,'int16');
@@ -428,6 +454,8 @@ function start_adq(hObject)
             ch_data(c).cont_filtered = zeros(1,nsamples,'double');
             ch_data(c).psd = ones(length(fs),1,'double');
             ch_data(c).psd_filtered = ones(length(fs),1,'double');
+            ch_data(c).log_psd = ones(length(fs),1,'double');
+            ch_data(c).log_psd_filtered = ones(length(fs),1,'double');
         end
     end
     set(handles.N_lb,'String','0');
@@ -453,13 +481,27 @@ function start_adq(hObject)
             end
         end
     end
+    linkaxes([handles.time_raw,handles.time_filtered],'x')
+    handles.spectrum.XMinorGrid = 'on'; handles.spectrum.YMinorGrid = 'on';hold(handles.spectrum,'on');    
+    handles.spectrum_zoom.XMinorGrid = 'on'; handles.spectrum_zoom.YMinorGrid = 'on';hold(handles.spectrum_zoom,'on');
+    xlabel(handles.spectrum,'Frequency (Hz)')
+    ylabel(handles.spectrum,'Power Spectrum (dB/Hz)')
+    xlabel(handles.time_filtered,'Time (sec)')
+    xlabel(handles.time_raw,'Time (sec)')
+    handles.time_raw.XMinorGrid = 'on'; handles.time_raw.YMinorGrid = 'on';
+    handles.time_raw.XMinorGrid = 'on'; handles.time_filtered.YMinorGrid = 'on';
+    xlabel(handles.spectrum_zoom,'Frequency (Hz)')
+    ylabel(handles.spectrum_zoom,'Power Spectrum (dB/Hz)')
+    
+    
     
     handles.timer_buffer = timer('Name','buffer_timer','Period',100,...
         'ExecutionMode','fixedSpacing','StartDelay',0.001);
     handles.timer_buffer.TimerFcn = {@buffer_loop,...
                                             handles.cbmex_lfp,handles};
     guidata(hObject, handles);
-    display_channel(1,hObject)
+    display_channel(1,handles)
+    [~,~]=cbmex('trialdata',1);
     start(handles.timer_buffer)
 end
 
@@ -479,12 +521,12 @@ function change_ch_Callback(hObject, inc)
     elseif new_n == 0
         new_n = maxch;
     end
-    display_channel(new_n,hObject)
+    display_channel(new_n,handles)
 end
 
 function save_b_Callback(hObject)
     h = guidata(hObject);
-    ch_info = getappdata(hObject,h.cbmex_lfp);
+    ch_info = getappdata(h.cbmex_lfp,'ch_info');
     ch_num = h.channels_lb.Value;
     selpath = uigetdir('choose folder');
     if h.save_all_cb.Value ==0
@@ -492,15 +534,15 @@ function save_b_Callback(hObject)
     else
         maxch = size(h.channels_lb.String,1);
         for ch = circshift(1:maxch,-4)
-            display_channel(ch,hObject)
+            display_channel(ch,h)
             drawnow
             saveas(h.cbmex_lfp,fullfile(selpath,[ch_info(ch_num).label '.png']));
         end
     end
 end
         
-function channels_lb_Callback(hObject,eventdata,handles)
-    display_channel(eventdata.Source.Value,hObject)
+function channels_lb_Callback(hObject,eventdata,h)
+    display_channel(eventdata.Source.Value,h)
 end
 
 function string = smpfilter2str(n)
@@ -545,7 +587,7 @@ end
 
 
 % --- Executes on button press in fix_ypower_cb.
-function fixscale_cb_Callback(hObject, eventdata)
+function fixscale_cb_Callback(hObject, ~)
 % hObject    handle to fix_ypower_cb (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)

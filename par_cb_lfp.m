@@ -51,7 +51,7 @@ par.custom_filter.('f10000').enable = false;
 par.custom_filter.('f10000').bp1 = 2;
 par.custom_filter.('f10000').bp2 =  3000;
 par.custom_filter.('f30000').enable = 1;
-par.custom_filter.('f30000').bp1 = 2;
+par.custom_filter.('f30000').bp1 = 300;
 par.custom_filter.('f30000').bp2 =  3000;
 
 
