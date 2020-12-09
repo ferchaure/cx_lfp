@@ -1,12 +1,11 @@
 function par = par_cb_lfp() 
 %just for one nsp
-par.IP_address = ''; %string, empty for default mode 
+par.IP_address = '192.168.137.3'; %string, empty for default mode 
 par.channels = 'all'; %vector of channels ID or all to use all channels
 par.ffftlength = 2^ceil(log2(30000*2))/30000; %seconds it will be increased to use a power of 2 
 %^this has to be the largest one in the used freqs
-par.freq_line = [60 120]; 
-%par.notch_width = 1;
-par.notch_q = 3;
+par.freqs_notch = [60 120]; 
+par.notch_width = 1;
 %plotting
 par.n_blocks  = 5;
 
@@ -41,25 +40,52 @@ par.custom_filter = struct;
 par.custom_filter.('f500').enable = false;
 par.custom_filter.('f500').bp1 = 2;
 par.custom_filter.('f500').bp2 =  100;
+par.custom_filter.('f500').order =  2;
+par.custom_filter.('f500').filter_type =  'ellip_order'; %'ellip_order' or 'ellip_stop_band'
+par.custom_filter.('f500').fstop1 = 0.5;
+par.custom_filter.('f500').fstop2 = 130;
+par.custom_filter.('f500').Rp = 0.07;
+par.custom_filter.('f500').Rs = 20;
+
 par.custom_filter.('f1000').enable = false;
 par.custom_filter.('f1000').bp1 = 2;
 par.custom_filter.('f1000').bp2 =  200;
+par.custom_filter.('f1000').enable = false;
+par.custom_filter.('f1000').filter_type =  'ellip_order'; %'ellip_order' or 'ellip_stop_band'
+par.custom_filter.('f1000').fstop1 = 0.5;
+par.custom_filter.('f1000').fstop2 = 260;
+par.custom_filter.('f1000').Rp = 0.07;
+par.custom_filter.('f1000').Rs = 20;
+
 par.custom_filter.('f2000').enable = false;
 par.custom_filter.('f2000').bp1 = 2;
 par.custom_filter.('f2000').bp2 =  500;
+par.custom_filter.('f2000').order =  2;
+par.custom_filter.('f2000').filter_type =  'ellip_order'; %'ellip_order' or 'ellip_stop_band'
+par.custom_filter.('f2000').fstop1 = 0.5;
+par.custom_filter.('f2000').fstop2 = 800;
+par.custom_filter.('f2000').Rp = 0.07;
+par.custom_filter.('f2000').Rs = 20;
+
 par.custom_filter.('f10000').enable = false;
 par.custom_filter.('f10000').bp1 = 2;
 par.custom_filter.('f10000').bp2 =  3000;
+par.custom_filter.('f10000').order =  2;
+par.custom_filter.('f10000').filter_type =  'ellip_order'; %'ellip_order' or 'ellip_stop_band'
+par.custom_filter.('f10000').fstop1 = 0.5;
+par.custom_filter.('f10000').fstop2 = 4000;
+par.custom_filter.('f10000').Rp = 0.07;
+par.custom_filter.('f10000').Rs = 20;
+
 par.custom_filter.('f30000').enable = 1;
 par.custom_filter.('f30000').bp1 = 300;
 par.custom_filter.('f30000').bp2 =  3000;
+par.custom_filter.('f30000').order =  2;
+par.custom_filter.('f30000').filter_type =  'ellip_order'; %'ellip_order' or 'ellip_stop_band'
+par.custom_filter.('f30000').fstop1 = 0.5;
+par.custom_filter.('f30000').fstop2 = 4000;
+par.custom_filter.('f30000').Rp = 0.07;
+par.custom_filter.('f30000').Rs = 20;
 
-
-%extra
-
-par.fstop_h = 1.3;%times fmax of bandpass (bp2) this have to be calculated in a gui
-par.fstop_l = 0.5; 
-par.Rp = 0.07;
-par.Rs = 20;
 end
  

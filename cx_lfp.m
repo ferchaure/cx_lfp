@@ -146,6 +146,8 @@ function display_channel(n,h)
     xline(h.time_raw,part_line,'k','LineStyle','--','LineWidth',1.5);
     ylabel(h.time_raw,['Raw (' ch_info(n).unit ')'])
     xlim(h.time_raw,[sr_data(ch_info(n).sri).t(1) sr_data(ch_info(n).sri).t(end)])
+    xticks(h.time_raw,linspace(sr_data(ch_info(n).sri).t(1),sr_data(ch_info(n).sri).t(end),par.n_blocks*2));
+    
     if getappdata(h.fix_yraw_cb,gui_par)
         ylim(h.time_raw,[getappdata(h.yraw_min,gui_par),getappdata(h.yraw_max,gui_par)])
     end
@@ -160,6 +162,7 @@ function display_channel(n,h)
         ylim(h.time_filtered,[getappdata(h.yfiltered_min,gui_par),getappdata(h.yfiltered_max,gui_par)])
     end
     xlim(h.time_filtered,[sr_data(ch_info(n).sri).t(1) sr_data(ch_info(n).sri).t(end)])
+    xticks(h.time_filtered,linspace(sr_data(ch_info(n).sri).t(1),sr_data(ch_info(n).sri).t(end),par.n_blocks*2));
 end
 
 
@@ -267,23 +270,34 @@ end
 
 % --- Executes on button press in restart_button.
 function restart_button_Callback(hObject, ~, ~)
-% hObject    handle to restart_button (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)  
-    stop_adq(hObject)
-    start_adq(hObject)
+    handles = guidata(hObject);
+    stop(handles.timer_buffer);
+    buffer = getappdata(handles.cbmex_lfp,'buffer');
+    ch_data = getappdata(handles.cbmex_lfp,'ch_data');
+    for c = 1:length(buffer)
+        buffer(c).nupdated = 0;
+        buffer(c).data(:) = 0;
+        ch_data(c).cont(:) = 0;
+        ch_data(c).cont_filtered(:) = 0;
+        ch_data(c).psd(:) = 0;
+        ch_data(c).psd_filtered(:) = 0;
+        ch_data(c).log_psd(:) = 1;
+        ch_data(c).log_psd_filtered(:) = 1;
+    end
+    set(handles.N_lb,'String','0');
+    setappdata(handles.cbmex_lfp,'N',0);
+    setappdata(handles.cbmex_lfp,'buffer',buffer);
+    setappdata(handles.cbmex_lfp,'ch_data',ch_data);
+    display_channel(handles.channels_lb.Value,handles)
+    handles.timer_buffer.StartDelay = 0.001;
+    [~, x] = cbmex('trialdata',1);
+    start(handles.timer_buffer);
 end
 
 % --- Executes on button press in set_param_button.
 function set_param_button_Callback(hObject, ~, ~)
-% hObject    handle to set_param_button (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-%restart = set_par_ui();
-if restart
     stop_adq(hObject)
     start_adq(hObject)
-end
 end
 
 % --- Executes when user attempts to close cx_lfp.
@@ -413,13 +427,13 @@ function start_adq(hObject)
         sr_data(si).t = linspace(0,nsamples/sr,nsamples);
 
         %calc notchs for this freq
-        %notchs = 1:min(par.num_notchs,floor((sr/2*0.9)/freq_line));
+        %notchs = 1:min(par.num_notchs,floor((sr/2*0.9)/freqs_notch));
         K = 1; Z = []; P = [];
 
-        for i= 1:length(par.freq_line)
-            w = par.freq_line(i)/(sr/2);
-            %bw = par.notch_width/(sr/2);
-            bw = w/par.notch_q;   
+        for i= 1:length(par.freqs_notch)
+            w = par.freqs_notch(i)/(sr/2);
+            bw = par.notch_width/(sr/2);
+            %bw = w/par.notch_q;   
             [b_notch,a_notch] = iirnotch(w,bw);
             [zi,pi,ki] = tf2zpk(b_notch,a_notch);
             K = K * ki;
@@ -433,10 +447,17 @@ function start_adq(hObject)
         sr_data(si).notch.G = G;
         
         if par.custom_filter.(parsr).enable
+            Rp = par.custom_filter.(parsr).Rp;
+            Rs = par.custom_filter.(parsr).Rs;
             wpass = [par.custom_filter.(parsr).bp1*2/sr par.custom_filter.(parsr).bp2*2/sr];
-            fstop_h = par.fstop_h * par.custom_filter.(parsr).bp2;
-            [orden_pass, Wnorm_pass] = ellipord(wpass,[par.fstop_l*2/sr fstop_h*2/sr],par.Rp,par.Rs);
-            [z_pass,p_pass,k_pass] = ellip(orden_pass,par.Rp,par.Rs,Wnorm_pass);
+            if strcmp(par.custom_filter.(parsr).filter_type,'ellip_stop_band')
+                fstop = [par.custom_filter.(parsr).fstop1  ,par.custom_filter.(parsr).fstop2 ]*2/sr;
+                [orden_pass, Wnorm_pass] = ellipord(wpass,fstop,Rp,Rs);
+                [z_pass,p_pass,k_pass] = ellip(orden_pass,Rp,Rs,Wnorm_pass);
+            else
+                [z_pass,p_pass,k_pass] = ellip(par.custom_filter.(parsr).order,Rp,Rs,wpass);
+            end
+            
             k_pass = k_pass * K;
             z_pass = [z_pass; Z'];
             p_pass = [p_pass; P'];
@@ -488,8 +509,9 @@ function start_adq(hObject)
     ylabel(handles.spectrum,'Power Spectrum (dB/Hz)')
     xlabel(handles.time_filtered,'Time (sec)')
     xlabel(handles.time_raw,'Time (sec)')
-    handles.time_raw.XMinorGrid = 'on'; handles.time_raw.YMinorGrid = 'on';
-    handles.time_raw.XMinorGrid = 'on'; handles.time_filtered.YMinorGrid = 'on';
+    handles.time_raw.XMinorGrid = 'on'; handles.time_raw.YMinorGrid = 'on'; 
+    handles.time_filtered.XMinorGrid = 'on'; handles.time_filtered.YMinorGrid = 'on';
+    xticks(handles.time_raw,'manual'); xticks(handles.time_filtered,'manual')
     xlabel(handles.spectrum_zoom,'Frequency (Hz)')
     ylabel(handles.spectrum_zoom,'Power Spectrum (dB/Hz)')
     
@@ -535,6 +557,7 @@ function save_b_Callback(hObject)
         maxch = size(h.channels_lb.String,1);
         for ch = circshift(1:maxch,-4)
             display_channel(ch,h)
+            ch_num = h.channels_lb.Value;
             drawnow
             saveas(h.cbmex_lfp,fullfile(selpath,[ch_info(ch_num).label '.png']));
         end
