@@ -84,7 +84,7 @@ function display_channel(n,h)
     %set gui params
     set(h.info_channel,'String',{sprintf('Sampl. Rate: %1.0f Hz',ch_info(n).sr),...
         sprintf('Cont. Acq.: %s',ch_info(n).smpfilter)});
-    
+    set(h.freqpanel,'Title',sprintf('Parameters for %1.0f Hz',ch_info(n).sr))
     pars = ch_info(n).parsr;
     set(h.xpower_min,'String',num2str(par.x_power_manual.(pars).min));
     set(h.xpower_max,'String',num2str(par.x_power_manual.(pars).max));
@@ -555,12 +555,15 @@ function save_b_Callback(hObject)
         saveas(h.cbmex_lfp,fullfile(selpath,[ch_info(ch_num).label '.png']));
     else
         maxch = size(h.channels_lb.String,1);
-        for ch = circshift(1:maxch,-4)
+        oldvalue = h.stop_refresh_cb.Value;
+        h.stop_refresh_cb.Value=true;
+        for ch = circshift(1:maxch,maxch-h.channels_lb.Value)
             display_channel(ch,h)
             ch_num = h.channels_lb.Value;
             drawnow
             saveas(h.cbmex_lfp,fullfile(selpath,[ch_info(ch_num).label '.png']));
         end
+        h.stop_refresh_cb.Value = oldvalue;
     end
 end
         
@@ -683,7 +686,7 @@ function setlim_Callback(hObject, e, h)
         else
             par.x_power_manual.(pars).max = new_value;
         end
-        setappdata(hObject,h.cbmex_lfp,'par',par);
+        setappdata(h.cbmex_lfp,'par',par);
         xlim(h.spectrum,[par.x_power_manual.(pars).min,par.x_power_manual.(pars).max]);
     end
     
@@ -693,7 +696,7 @@ function setlim_Callback(hObject, e, h)
         else
             par.x_power_manual.(pars).max_zoom = new_value;
         end
-        setappdata(hObject,h.cbmex_lfp,'par',par);
+        setappdata(h.cbmex_lfp,'par',par);
         xlim(h.spectrum_zoom,[par.x_power_manual.(pars).min_zoom,par.x_power_manual.(pars).max_zoom]);
     end
     
